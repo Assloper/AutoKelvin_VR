@@ -6,7 +6,10 @@ using System.IO;
 using System.IO.Ports;
 using System.Threading;
 using Parsing;
+using UnityEngine.Audio;
 using System.Runtime.ExceptionServices;
+using System.Linq;
+using Unity.VisualScripting;
 
 public class Serial_DataStream : MonoBehaviour
 {
@@ -32,6 +35,14 @@ public class Serial_DataStream : MonoBehaviour
     static int Sample_Num = 1;
     public string output_data;
     byte[] PacketStreamData = new byte[Ch_Num * 2 * Sample_Num];
+    private float[] ppgdata;
+
+
+    public AudioMixer audioMixer;
+    public AudioMixerGroup audioMixerGroup;
+
+    private float filterCutoffLow = 0.5f;
+    private float filterCutoffHigh = 4.0f;
 
     int Parsing_LXDFT2(byte data_crnt)
     {
@@ -97,7 +108,6 @@ public class Serial_DataStream : MonoBehaviour
                 serialPort.StopBits = StopBits.One;
                 serialPort.Parity = Parity.None;
                 serialPort.Open();
-                Thread.Sleep(10);
             }
 
         }
@@ -121,20 +131,110 @@ public class Serial_DataStream : MonoBehaviour
         {
             byte[] buffer = new byte[receivedNumber];
             serialPort.Read(buffer, 0, receivedNumber);
+            List<float> ppgdata = new List<float>();
+
+            int dataIndex = 0;
+
             foreach (byte receivedData in buffer)
             {
                 if (Parsing_LXDFT2(receivedData) == 1)
                 {
                     int i = 0;
-                    Debug.Log(string.Format("{0} ", ((PacketStreamData[i * 2] & 0x0F) << 8) + PacketStreamData[i * 2 + 1]));
+                    int streamdata = ((PacketStreamData[i * 2] & 0x0F) << 8) + PacketStreamData[i * 2 + 1]; //PPG 데이터
+                    float stdata = (float)streamdata;
+                    ppgdata.Add(stdata);
+                    float[] ppgArray = ppgdata.ToArray();
+                    ConvertToSSF(ppgArray);
+
                 }
             }
+        }
+    }
+    List<int> peakIndices = new List<int>();
 
+    int previousPeakIndex = -1;
+    float peakThreshold = 2500f;
+    const int windowsSize = 32;
+    private float samplingRate = 255f;
+    double ThresholdRatio = 0.7;
+    int IntervalSeconds = 3;
+
+
+    void PeakDetection()
+    {
+        float[] ppgSignal = GetPPGSignal();
+
+        float[] sefSignal = ConvertToSSF(ppgSighnal);
+
+        double threshold = 0;
+        float[] thresholdBuffer = new float[5];
+
+        for (int i = 0; i < ssfSignal.Length; i++)
+        {
+            if(i < IntervalSeconds * 255)
+            {
+                float maxPeak = ssfSignal.Skip(i).Take(255).Max();
+                threshold = ThresholdRatio * maxPeak;
+            }
+
+            if (ssfSignal[i] > threshold)
+            {
+
+            }
         }
     }
 
+    float[] ConvertToSSF(float[] ppgSignal)
+    {
+        float[] ssfSignal = new float[ppgSignal.Length - windowsSize + 1];
 
+        for (int i = 0; i < ssfSignal.Length; i++)
+        {
+            float sum = 0;
 
-    // Update is called once per frame
+            for (int j = 0; j < windowsSize; j++)
+            {
+                sum += ppgSignal[i + j];
+            }
 
+            ssfSignal[i] = sum/windowsSize;
+        }
+
+        return ssfSignal;
+    }
+
+    void DetectPeaks(float[] data)
+    {
+        // Peak 검출 알고리즘
+        for (int i = 1; i < data.Length; i++)
+        {
+            float derivative = data[i] - data[i - 1];
+            float squaredSignal = derivative * derivative;
+            if (data[i] > peakThreshold)
+            {
+                //peakIndices에 1씩 추가
+                peakIndices.Add(i);
+
+                //피크가 2개 이상일때
+                if (peakIndices.Count >= 2)
+                {
+                    int totalPeaks = peakIndices.Count;
+                    int currentPeakIndex = peakIndices[totalPeaks - 1];
+
+                    if (previousPeakIndex != -1)
+                    {
+                        float currentPeakTime = currentPeakIndex / 255f;
+                        float previousPeakTime = previousPeakIndex / 255f;
+                        float ppi = (currentPeakTime - previousPeakTime) * 1000f;
+
+                        Debug.Log("PPI: " + ppi + "ms " + "Peak 감지: " + totalPeaks + ", 값 " + data[i]);
+                    }
+
+                    //현재 피크를 이전 피크로 설정
+                    previousPeakIndex = currentPeakIndex;
+                }
+            }
+        }
+        
+    }
 }
