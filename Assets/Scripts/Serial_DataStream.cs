@@ -10,6 +10,7 @@ using UnityEngine.Audio;
 using System.Runtime.ExceptionServices;
 using System.Linq;
 using Unity.VisualScripting;
+using System.IO.Enumeration;
 
 public class Serial_DataStream : MonoBehaviour
 {
@@ -20,6 +21,8 @@ public class Serial_DataStream : MonoBehaviour
     public Serial_DataStream()
     {
     }
+
+    List<float> listPPG = new List<float>();
 
     bool Sync_After = false;
     // 바이트 선언
@@ -43,6 +46,17 @@ public class Serial_DataStream : MonoBehaviour
 
     private float filterCutoffLow = 0.5f;
     private float filterCutoffHigh = 4.0f;
+
+    List<int> peakIndices = new List<int>();
+
+    int previousPeakIndex = -1;
+    float peakThreshold = 2500f;
+    const int windowsSize = 128; // SSF 계산을 위한 창 크기
+    private float samplingRate = 255f;
+    const float InitialThresholdRatio = 0.7f;
+    int IntervalSeconds = 3;
+    const int BufferSize = 5; // SSF 피크 저장하는 버퍼 크기
+
 
     int Parsing_LXDFT2(byte data_crnt)
     {
@@ -118,54 +132,82 @@ public class Serial_DataStream : MonoBehaviour
         
     }
 
+    IEnumerator ReceivePPG()
+    {
+
+        while (true)
+        {
+            int receivedNumber = serialPort.BytesToRead;
+
+            if (receivedNumber > 0)
+            {
+                byte[] buffer = new byte[receivedNumber];
+                serialPort.Read(buffer, 0, receivedNumber);
+
+
+                int dataIndex = 0;
+
+                foreach (byte receivedData in buffer)
+                {
+                    if (Parsing_LXDFT2(receivedData) == 1)
+                    {
+
+
+                        int i = 0;
+                        int streamdata = ((PacketStreamData[i * 2] & 0x0F) << 8) + PacketStreamData[i * 2 + 1]; //PPG 데이터
+
+                        listPPG.Add((float)streamdata);
+
+                        float[] ppgArray = listPPG.ToArray();
+
+                        // ppg 개수가 windowsize 만큼 뺄수 있게 되고부터 실행
+                        //Debug.Log(ppgArray.Length);
+
+                        if ((ppgArray.Length - windowsSize + 1) >= 0)
+                        {
+
+                            PeakDetection(ppgArray);
+                            //WriteCSVSSF(ppgArray);
+                            //WriteCSVRAW(ppgArray);
+
+                        }
+
+
+                    }
+                }
+            }
+
+            yield return new WaitForSeconds(1f);
+        }
+        
+    }
+
+    string filename_SSFPPG = "";
+    string filename_RAWPPG = "";
     void Start()
     {
         SerialOpen();
+        StartCoroutine(ReceivePPG());
+        filename_SSFPPG = Application.dataPath + "/SSFPPG.csv";
+        filename_RAWPPG = Application.dataPath + "/RawPPG.csv";
+
     }
 
     void Update()
     {
-        int receivedNumber = serialPort.BytesToRead;
 
-        if (receivedNumber > 0)
-        {
-            byte[] buffer = new byte[receivedNumber];
-            serialPort.Read(buffer, 0, receivedNumber);
-            List<float> ppgdata = new List<float>();
-
-            int dataIndex = 0;
-
-            foreach (byte receivedData in buffer)
-            {
-                if (Parsing_LXDFT2(receivedData) == 1)
-                {
-                    int i = 0;
-                    int streamdata = ((PacketStreamData[i * 2] & 0x0F) << 8) + PacketStreamData[i * 2 + 1]; //PPG 데이터
-                    float stdata = (float)streamdata;
-                    ppgdata.Add(stdata);
-                    float[] ppgArray = ppgdata.ToArray();
-                    PeakDetection(ppgArray);
-                }
-            }
-        }
     }
 
-    List<int> peakIndices = new List<int>();
 
-    int previousPeakIndex = -1;
-    float peakThreshold = 2500f;
-    const int windowsSize = 32; // SSF 계산을 위한 창 크기
-    private float samplingRate = 255f;
-    const float InitialThresholdRatio = 0.7f;
-    int IntervalSeconds = 3;
-    const int BufferSize = 5; // SSF 피크 저장하는 버퍼 크기
 
 
 
     // PPG신호를 SSF신호로 변환하는 함수
     static float[] ConvertToSSF(float[] ppgSignal)
     {
+
         // SSF 신호를 저장할 배열
+        //Debug.Log(ppgSignal.Length);
         float[] ssfSignal = new float[ppgSignal.Length - windowsSize + 1];
 
         // SSF 계산
@@ -183,6 +225,8 @@ public class Serial_DataStream : MonoBehaviour
         }
 
         return ssfSignal;
+
+
     }
 
     //실시간 피크 검출 알고리즘
@@ -206,7 +250,7 @@ public class Serial_DataStream : MonoBehaviour
 
             if(ssfPeak > threshold)
             {
-                Debug.Log($"인덱스 {i}에서 피크 검출, SSF 값: {ssfPeak}");
+
             }
         }
     }
@@ -223,7 +267,9 @@ public class Serial_DataStream : MonoBehaviour
         return adjustedThreshold;
     }
 
-    void DetectPeaks(float[] data)
+    //PPG를 어떻게 실시간으로 피크를 검출할 수 있을까.....
+
+    /*void DetectPeaks(float[] data)
     {
         // Peak 검출 알고리즘
         for (int i = 1; i < data.Length; i++)
@@ -247,7 +293,7 @@ public class Serial_DataStream : MonoBehaviour
                         float previousPeakTime = previousPeakIndex / 255f;
                         float ppi = (currentPeakTime - previousPeakTime) * 1000f;
 
-                        Debug.Log("PPI: " + ppi + "ms " + "Peak 감지: " + totalPeaks + ", 값 " + data[i]);
+                        //Debug.Log("PPI: " + ppi + "ms " + "Peak 감지: " + totalPeaks + ", 값 " + data[i]);
                     }
 
                     //현재 피크를 이전 피크로 설정
@@ -256,5 +302,53 @@ public class Serial_DataStream : MonoBehaviour
             }
         }
         
+    }*/
+
+
+    string RawPPG;
+
+
+    /*public void WriteCSVSSF(float[] excel)
+    {
+        float[] ppgArray = excel.ToArray();
+        float[] ssfSignal = ConvertToSSF(ppgArray);
+
+
+        if (ssfSignal.Length > 0)
+        {
+            TextWriter tw = new StreamWriter(filename_SSFPPG, false);
+            tw.WriteLine("SSF PPG");
+            tw.Close();
+
+            tw = new StreamWriter(filename_SSFPPG, true);
+
+            for(int i = 0; i < ssfSignal.Length; i++)
+            {
+                tw.WriteLine(ssfSignal[i]);
+            }
+            tw.Close();
+        }
     }
+    public void WriteCSVRAW(float[] excel2)
+    {
+        float[] ppgArray = excel2.ToArray();
+        float[] ssfSignal = ConvertToSSF(ppgArray);
+
+
+        if (ppgArray.Length > 0)
+        {
+            TextWriter tw = new StreamWriter(filename_RAWPPG, false);
+            tw.WriteLine("RAW PPG");
+            tw.Close();
+
+            tw = new StreamWriter(filename_RAWPPG, true);
+
+            for (int i = 0; i < ppgArray.Length; i++)
+            {
+                tw.WriteLine(ppgArray[i]);
+            }
+            tw.Close();
+        }
+    }*/
+
 }
