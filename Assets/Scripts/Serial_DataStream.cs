@@ -42,6 +42,7 @@ public class Serial_DataStream : MonoBehaviour
     private float[] ppgdata;
 
 
+
     public AudioMixer audioMixer;
     public AudioMixerGroup audioMixerGroup;
 
@@ -157,12 +158,13 @@ public class Serial_DataStream : MonoBehaviour
 
                         float[] ppgArray = listPPG.ToArray();
 
+                        //PeakDetect(ppgArray);
+
                         if ((ppgArray.Length - windowsSize + 1) >= 0)
                         {
-                            //PeakDetect(ConvertToSSF(ppgArray));
-                            WriteCSVRAW(ppgArray);
-
-                            //List<int> detectedPeaks = PeakDetect(ConvertToSSF(ppgArray));
+                            //List<int> peakIndices = PeakDetect(ppgArray);
+                            //PeakDetect(ppgArray);
+                            Debug.Log("PPG 데이터 값: " + streamdata);
                         }
 
 
@@ -214,9 +216,8 @@ public class Serial_DataStream : MonoBehaviour
 
             // 평균 계산하여 SSF에 저장
             ssfSignal[i] = sum/windowsSize;
-            //Debug.Log("ssfSignal 값 " + ssfSignal[i]);
 
-            //PeakDetect(ssfSignal);
+            //PeakDetection(ssfSignal);
         }
         return ssfSignal;
 
@@ -226,21 +227,20 @@ public class Serial_DataStream : MonoBehaviour
     
 
     //피크 검출 알고리즘 v1
-    public List<int> PeakDetect(float[] ssfSignal)
+    static List<int> PeakDetect(float[] ppgArray)
     {
-        int peakIndex = -1;
+        int peakIndex = -1; //피크의 위치값
         List<int> peakIndices = new List<int>(); //peakIndex 저장하는 리스트
         float peakValue = float.MinValue; //피크의 가장 작은 신호값
-        float Baseline = CaloulateAverage(ssfSignal);
+        float Baseline = CaloulateAverage(ppgArray);
 
 
-
-        for (int i = 1; i < ssfSignal.Length; i++)
+        for (int i = 1; i < ppgArray.Length; i++)
         {
             // 현재 SSFsignal 값
-            float value = ssfSignal[i];
+            float value = ppgArray[i];
             // 이전의 SSFsignal 값
-            float derivative = value - ssfSignal[i - 1];
+            float derivative = value - ppgArray[i - 1];
             //만약에 현재 value가 Baseline 값을 넘었을 때
             if (value > Baseline)
             {
@@ -264,12 +264,12 @@ public class Serial_DataStream : MonoBehaviour
             }
 
         }
-        //만약 PeakIndex가 다를때
+        //만약 PeakIndex가 다를때 
         if (peakIndex != -1)
         {
             //마지막으로 설정된 피크가 있을 경우
             peakIndices.Add(peakIndex);
-            Debug.Log("현재 피크 값: " + peakValue + "피크 넘버: " + peakIndices.Count + "");
+            Debug.Log("피크 임계값: " + peakValue + "피크의 개수: " + peakIndices.Count);
         }
 
 
@@ -277,7 +277,7 @@ public class Serial_DataStream : MonoBehaviour
     }
    
     //배열의 평균값 계산 함수
-    float CaloulateAverage(float[] values)
+    static float CaloulateAverage(float[] values)
     {
         //합계를 저장하는 변수 초기화
         float sum = 0;
@@ -294,9 +294,10 @@ public class Serial_DataStream : MonoBehaviour
     }
     
     //실시간 피크 검출 알고리즘
-    /*static void PeakDetection(float[] ppgData)
+    static void PeakDetection(float[] peakdetec)
     {
-        float[] ppgArray = ppgData.ToArray();
+
+        float[] ppgArray = peakdetec.ToArray();
         float[] ssfSignal = ConvertToSSF(ppgArray);
         List<float> ssfPeaksBuffer = new List<float>();
 
@@ -314,7 +315,7 @@ public class Serial_DataStream : MonoBehaviour
 
             if(ssfPeak > threshold)
             {
-
+                Debug.Log("피크 임계값: " + ssfPeak + "피크의 개수: " + ssfPeaksBuffer.Count);
             }
         }
     }
@@ -329,7 +330,7 @@ public class Serial_DataStream : MonoBehaviour
         float adjustedThreshold = initialThreshold;
 
         return adjustedThreshold;
-    }*/
+    }
 
     //PPG를 어떻게 실시간으로 피크를 검출할 수 있을까.....
 
@@ -393,11 +394,10 @@ public class Serial_DataStream : MonoBehaviour
             tw.Close();
         }
     }*/
-    public void WriteCSVRAW(float[] excel2)
+    /*public void WriteCSVRAW(float[] excel2)
     {
         float[] ppgArray = excel2.ToArray();
         float[] ssfSignal = ConvertToSSF(ppgArray);
-
 
         if (ppgArray.Length > 0)
         {
@@ -407,21 +407,31 @@ public class Serial_DataStream : MonoBehaviour
 
             tw = new StreamWriter(filename_RAWPPG, true);
 
-            float currentTime = 0;
+            Stopwatch stopwatch = new Stopwatch();
+            stopwatch.Start();
+
+            //float currentTime = 0;
 
             for (int i = 0; i < ppgArray.Length; i++)
             {
-                double seconds = currentTime / 1000.0;
+                long elapsedMilliseconds = stopwatch.ElapsedMilliseconds;
+                //double seconds = currentTime / 1000.0;
 
-                TimeSpan timeSpan = TimeSpan.FromSeconds(seconds);
+                TimeSpan timeSpan = TimeSpan.FromMilliseconds(elapsedMilliseconds);
 
-                string formattedTime = $":{timeSpan.Seconds:D2}:{timeSpan.Milliseconds:D2}";
+                //string formattedTime = $":{timeSpan.Seconds:D2}:{timeSpan.Milliseconds:D2}";
+
+                //tw.WriteLine($"{formattedTime}, {ppgArray[i]}");
+
+                //currentTime += Time.deltaTime * 1000;
+                string formattedTime = $"{timeSpan.Hours:D1}:{timeSpan.Minutes:D2}:{timeSpan.Seconds:D2}";
 
                 tw.WriteLine($"{formattedTime}, {ppgArray[i]}");
-
-                currentTime += Time.deltaTime * 1000;
             }
+
+            stopwatch.Stop();
             tw.Close();
         }
     }
+    */
 }
