@@ -318,8 +318,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1421330554}
-  - component: {fileID: 1421330553}
-  - component: {fileID: 1421330556}
   - component: {fileID: 1421330555}
   m_Layer: 0
   m_Name: SerialPortOpen
@@ -328,18 +326,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1421330553
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1421330552}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cc6917c362bc411439fe21afb1bdd50f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!4 &1421330554
 Transform:
   m_ObjectHideFlags: 0
@@ -364,23 +350,10 @@ MonoBehaviour:
   m_GameObject: {fileID: 1421330552}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a46278bb0cc273d42b6b36d3ef8eff92, type: 3}
+  m_Script: {fileID: 11500000, guid: fd086c6849f4d7542b38e74a5da81d8c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  SerialPortOpen: {fileID: 1421330552}
---- !u!114 &1421330556
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1421330552}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9e3482a66a265c44280060fb98400209, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  PacketStreamData: 000000000000000000000000
+  output_data: 
 --- !u!1 &1571009842
 GameObject:
   m_ObjectHideFlags: 0
