@@ -35,6 +35,24 @@ public class DebugGUIExamples : MonoBehaviour
     [DebugGUIGraph(min: -1, max: 1, r: 0, g: 1, b: 0, autoScale: true)]
     float SinField;
 
+    // As well as properties
+    [DebugGUIGraph(min: -1, max: 1, r: 0, g: 1, b: 1, autoScale: true)]
+    float CosProperty { get { return Mathf.Cos(Time.time * 6); } }
+
+#if NET_4_6
+    // Also works for expression-bodied properties in .Net 4.6+
+    [DebugGUIGraph(min: -1, max: 1, r: 1, g: 0.3f, b: 1)]
+    float SinProperty => Mathf.Sin((Time.time + Mathf.PI / 2) * 6);
+#else
+    [DebugGUIGraph(min: -1, max: 1, r: 1, g: 0.5f, b: 1)]
+    float SinProperty { get { return Mathf.Sin((Time.time + Mathf.PI / 2) * 6); } }
+#endif
+
+    // User inputs, print and graph in one!
+    [DebugGUIPrint, DebugGUIGraph(group: 1, r: 1, g: 0.3f, b: 0.3f)]
+    float mouseX;
+    [DebugGUIPrint, DebugGUIGraph(group: 1, r: 0, g: 1, b: 0)]
+    float mouseY;
 
     void Awake()
     {
@@ -42,16 +60,30 @@ public class DebugGUIExamples : MonoBehaviour
         DebugGUI.Log("Hello! I will disappear in five seconds!");
 
         // Set up graph properties using our graph keys
+        DebugGUI.SetGraphProperties("smoothFrameRate", "SmoothFPS", 0, 200, 2, new Color(0, 1, 1), false);
+        DebugGUI.SetGraphProperties("frameRate", "FPS", 0, 200, 2, new Color(1, 0.5f, 1), false);
+        DebugGUI.SetGraphProperties("fixedFrameRateSin", "FixedSin", -1, 1, 3, new Color(1, 1, 0), true);
     }
 
     void Update()
     {
         // Update the fields our attributes are graphing
-        //SinField = Mathf.Sin(Time.time * 6);
+        SinField = Mathf.Sin(Time.time * 6);
+        mouseX = Input.mousePosition.x / Screen.width;
+        mouseY = Input.mousePosition.y / Screen.height;
 
+        // Manual logging
+        if (Input.GetMouseButtonDown(0))
+        {
+            DebugGUI.Log(string.Format(
+                "Mouse clicked! ({0}, {1})",
+                mouseX.ToString("F3"),
+                mouseY.ToString("F3")
+            ));
+        }
 
         // Manual persistent logging
-        DebugGUI.LogPersistent("smoothFrameRate", "SmoothFPS: " + (1 / Time.deltaTime).ToString("F3"));
+        DebugGUI.LogPersistent("smoothFrameRatee", "SmoothFPS: " + (1 / Time.deltaTime).ToString("F2"));
         DebugGUI.LogPersistent("frameRate", "FPS: " + (1 / Time.smoothDeltaTime).ToString("F3"));
 
         if (Time.smoothDeltaTime != 0)
@@ -74,5 +106,4 @@ public class DebugGUIExamples : MonoBehaviour
 
         DebugGUI.RemovePersistent("frameRate");
     }
-
 }

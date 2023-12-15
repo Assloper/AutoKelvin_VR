@@ -11,7 +11,7 @@ using System.Linq;
 using Unity.VisualScripting;
 using System.IO.Enumeration;
 using System.Runtime.InteropServices;
-
+using System.Diagnostics.Eventing.Reader;
 
 public class Serial_DataStream : MonoBehaviour
 {
@@ -26,7 +26,7 @@ public class Serial_DataStream : MonoBehaviour
 
     bool Sync_After = false;
     // 바이트 선언
-    byte Packet_TX_Index = 0; 
+    byte Packet_TX_Index = 0;
     byte Data_Prev = 0;
     byte PUD0 = 0;
     byte CRD_PUD2_PCDT = 0;
@@ -39,7 +39,7 @@ public class Serial_DataStream : MonoBehaviour
     public string output_data;
     byte[] PacketStreamData = new byte[Ch_Num * 2 * Sample_Num];
 
-
+    DateTime startTime;
 
 
     int previousPeakIndex = -1;
@@ -104,7 +104,7 @@ public class Serial_DataStream : MonoBehaviour
     {
         try
         {
-            if(!serialPort.IsOpen)
+            if (!serialPort.IsOpen)
             {
                 serialPort.PortName = "COM3";
                 serialPort.BaudRate = 115200;
@@ -117,94 +117,96 @@ public class Serial_DataStream : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Debug.LogError("시리얼 포트가 연결되지 않았습니다.");
+            //Debug.LogError("시리얼 포트가 연결되지 않았습니다.");
         }
-        
+
     }
 
-    IEnumerator ReceivePPG()
+    int streamdata;
+
+    void PPGdata()
     {
+        int receivedNumber = serialPort.BytesToRead;
 
-        while (true)
+        if (receivedNumber > 0)
         {
-            int receivedNumber = serialPort.BytesToRead;
+            byte[] buffer = new byte[receivedNumber];
+            serialPort.Read(buffer, 0, receivedNumber);
 
-            if (receivedNumber > 0)
+            foreach (byte receivedData in buffer)
             {
-                byte[] buffer = new byte[receivedNumber];
-                serialPort.Read(buffer, 0, receivedNumber);
-
-                foreach (byte receivedData in buffer)
+                if (Parsing_LXDFT2(receivedData) == 1)
                 {
-                    if (Parsing_LXDFT2(receivedData) == 1)
+                    int i = 0;
+                    streamdata = ((PacketStreamData[i * 2] & 0x0F) << 8) + PacketStreamData[i * 2 + 1]; //PPG 데이터
+                    listPPG.Add(streamdata);
+
+                    int[] ppgArray = listPPG.ToArray();
+
+                    if (ppgArray.Length >= 0)
                     {
+                        WriteCSVRAW();
 
-
-                        int i = 0;
-                        int streamdata = ((PacketStreamData[i * 2] & 0x0F) << 8) + PacketStreamData[i * 2 + 1]; //PPG 데이터
-
-                        listPPG.Add(streamdata);
-
-                        int[] ppgArray = listPPG.ToArray();
-                        if (ppgArray.Length > 0)
-                        {
-                            DebugGUI.LogPersistent("PPG", "PPG: " + ppgArray[ppgArray.Length - 1].ToString("F3"));
-                            DebugGUI.Graph("PPG", ppgArray[ppgArray.Length - 1]);
-                        }
-
-                        //PeakDetection(ppgArray);
+                        //SSF_Filtering(ppgArray);
+                        PeakDetection(ppgArray);
+                        DebugGUI.LogPersistent("PPG", "PPG: " + ppgArray[ppgArray.Length - 1].ToString("F3"));
+                        DebugGUI.Graph("PPG", ppgArray[ppgArray.Length - 1]);
                     }
                 }
             }
-
-            yield return new WaitForSeconds(1f);
         }
-        
     }
+            
 
 
+    TextWriter tw;
     void Start()
     {
         SerialOpen();
-        StartCoroutine(ReceivePPG());
+        startTime = DateTime.Now;
+        TextWriter tw = new StreamWriter(filename_RAWPPG, false);
+        tw.WriteLine("Time, Value, Peak Time, Peak Data");
+        tw.Close();
     }
 
     void Awake()
     {
-        DebugGUI.SetGraphProperties("PPG", "PPG", 1000, 3000, 0, new Color(1, 0.5f, 1), false);
+        DebugGUI.SetGraphProperties("PPG", "PPG", 1000, 3500, 0, new Color(1, 0.5f, 1), false);
+        DebugGUI.SetGraphProperties("Peak", "Peak", 1000, 3500, 0, new Color(1, 0.3f, 1), false);
     }
 
     void Update()
     {
-        //int[] ppgArray = listPPG.ToArray();
-
+        PPGdata();
     }
 
-    /*List<int> ssfArray = new List<int>();
-    public void SSF_Filtering(int[] ppgArray, int w)
+    /*int wplus = 0;
+    List<int> ssfArray = new List<int>();
+    public void SSF_Filtering(int[] ppgArray)
     {
-        int SSFvalueIndex = ppgArray.Length - 1;
-        int preSSFvalueIndex = ppgArray.Length - 2;
-        int SSFvalue = ppgArray[SSFvalueIndex];
-        int preSSFvalue = ppgArray[preSSFvalueIndex];
-        int SSFinterval = SSFvalue - preSSFvalue;
-        w = 32;
-        int sum = 0;
-        if (ppgArray.Length > w)
+        if (ppgArray.Length%32 == 0)
         {
-            for(int i = ppgArray.Length - w; k < ppgArray.Length; k++)
+            int SSF = 0;
+            int[] u = new int[32];
+            int[] y = new int[32];
+            for (int i = 0 + wplus; i < ppgArray.Length; i++)
             {
-                if (SSFinterval > 0)
+                y[i] = ppgArray[i+1] - ppgArray[i];  //차분
+                if (y[i] <= 0)
                 {
-                    ssfArray.Add(SSFinterval);
+                    u[i] = 0;
                 }
                 else
                 {
-                    ssfArray.Add(0);
+                    u[i] = y[i];
                 }
+                SSF += u[i];
+                ssfArray.Add(SSF);
             }
-        }
+            wplus += 32;
 
+            Debug.Log("SSF 값: " + ssfArray[ssfArray.Count - 1]);
+        }
     }*/
 
     public class BandpassFilter
@@ -218,7 +220,7 @@ public class Serial_DataStream : MonoBehaviour
     public void PeakDetection(int[] ppgArray)
     {
         int Baseline = 2500; //Peak의 경계선
-        
+
         int prevalue;
         int valueIndex = ppgArray.Length - 1;
         int value = ppgArray[valueIndex];
@@ -239,16 +241,10 @@ public class Serial_DataStream : MonoBehaviour
             {
                 flag = true;
                 peaklist.Add(prevalue);
+                DebugGUI.Graph("Peak", peaklist[peaklist.Count -1]);
+                DebugGUI.LogPersistent("Peak", "Peak: " + peaklist[peaklist.Count - 1].ToString("F2"));
                 if (peaklist.Count > 1)
                 {
-                    int PeakIndex = peaklist.Count - 1;
-                    int prePeakIndex = peaklist.Count - 2;
-                    float PeakTime = PeakIndex / 255f;
-                    float prePeakTime = prePeakIndex / 255f;
-                    float ppi = (PeakTime - prePeakTime) * 1000f;
-
-                    //Debug.Log("PPI : " + ppi + "s " + "Peak: " + peaklist[peaklist.Count -1] + " 피크의 개수: " + peaklist.Count);
-                    prePeakIndex = PeakIndex;
                 }
             }
 
@@ -257,8 +253,10 @@ public class Serial_DataStream : MonoBehaviour
         {
             flag = false;
         }
-    } 
+    }
 
+    int beforPeak;
+    int currentPeak;
     //평균이동선 구하는 함수
     static int CaloulateAverage(int[] values)
     {
@@ -271,32 +269,52 @@ public class Serial_DataStream : MonoBehaviour
 
         return (int)(sum / values.Length);
     }
-    /*string filename_RAWPPG = Application.dataPath + "/Test.csv";
+
+    private void OnDestroy()
+    {
+        serialPort.Close();
+        DebugGUI.RemoveGraph("PPG");
+    }
+    string filename_RAWPPG = Application.dataPath + "/Test.csv";
     string filename = "";
 
     string diff_time;
-    public void WriteCSVRAW(int[] excel2)
+    bool check = false;
+    DateTime StartDate;
+    DateTime EndDate;
+    TimeSpan elapsed;
+
+    int diffHours;
+    int diffMinutes;
+    int diffSeconds;
+    int diffMs;
+
+    public void WriteCSVRAW()
     {
-        int[] ppgArray = excel2.ToArray();
+        int[] ppgArray = listPPG.ToArray();
 
-        if (ppgArray.Length > 0)
+        tw = new StreamWriter(filename_RAWPPG, true); // true를 사용하여 파일에 추가 모드로 열기
+
+        
+        DateTime currentTime = DateTime.Now;
+        TimeSpan elapsed = currentTime - startTime;
+        diff_time = string.Format("{0}:{1}:{2}:{3}", elapsed.Hours, elapsed.Minutes, elapsed.Seconds, elapsed.Milliseconds);
+        Debug.Log("시간: " + diff_time);
+        if (peaklist.Count > 1 && (peaklist.Count - 1 != peaklist.Count -2))
         {
-            TextWriter tw = new StreamWriter(filename_RAWPPG, false);
-            tw.WriteLine("Time, Value");
-            tw.Close();
-
-            tw = new StreamWriter(filename_RAWPPG, false);
-            DateTime startTime = DateTime.Now;
-            DateTime currentTime = DateTime.Now;
-            TimeSpan elapsed = currentTime - startTime;
-            diff_time = string.Format("{0}:{1}:{2}.{3}", elapsed.Hours, elapsed.Minutes, elapsed.Seconds, elapsed.Milliseconds);
-
-
-            for (int i = 0; i < ppgArray.Length; i++)
-            {
-                tw.WriteLine($"{diff_time}, {ppgArray[i]}");
-            }
-            tw.Close();
+            check = true;
+            tw.WriteLine("{0}, {1}, {2}, {3}", diff_time, ppgArray[ppgArray.Length - 1], diff_time, peaklist[peaklist.Count - 1]);
         }
-    }*/
+        else
+        {
+            check = false;
+            tw.WriteLine("{0}, {1}, {2}, {3}", diff_time, ppgArray[ppgArray.Length - 1], diff_time, 0);
+        }   
+
+
+        tw.Flush();
+        tw.Close();
+    }
 }
+
+
