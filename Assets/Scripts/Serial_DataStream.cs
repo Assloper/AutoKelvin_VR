@@ -18,6 +18,7 @@ using Accord.Math.Transforms;
 using UnityEngine.Experimental.Audio;
 using System.Numerics;
 using UnityEditor;
+using System.Drawing.Text;
 
 public class Serial_DataStream : MonoBehaviour
 {
@@ -161,7 +162,8 @@ public class Serial_DataStream : MonoBehaviour
         SerialOpen();
         startTime = DateTime.Now;
         TextWriter tw = new StreamWriter(filename_RAWPPG, false);
-        tw.WriteLine("Time, Value, Peak Time, Peak Data, SDNN Time, SDNN Data, RMSSD Time, RMSSD Data");
+        //tw.WriteLine("SDNN, RMSSD, LF/HF Ratio, LF_Power, HF_Power");
+        tw.WriteLine("Time, Value, Peak Time, Peak Data, SDNN Time, SDNN Data, RMSSD Time, RMSSD Data, LF/HF Ratio Time, LF/HF Ratio Data, LF_Power, HF_Power");
         tw.Close();
     }
 
@@ -169,7 +171,7 @@ public class Serial_DataStream : MonoBehaviour
     {
         DebugGUI.SetGraphProperties("PPG", "PPG", 1000, 3500, 0, new Color(1, 0.5f, 1), false);
         DebugGUI.SetGraphProperties("PPI", "PPI", 0, 1000, 1, new Color(0, 1f, 0), false);
-        DebugGUI.SetGraphProperties("FFT", "FFT", 0, 100, 2, new Color(1, 0.5f, 0), true);
+        DebugGUI.SetGraphProperties("FFT", "FFT", 0, 100, 2, new Color(1, 0.5f, 0), false);
     }
 
     void Update()
@@ -217,6 +219,7 @@ public class Serial_DataStream : MonoBehaviour
         }
     }*/
 
+
     /*static double[] ApplyBandpassFilter(double[] ppgArray, double samplingRate, double low, double high)
     {
         HighPassFilter bandpassFilter = new IirFilter
@@ -229,6 +232,12 @@ public class Serial_DataStream : MonoBehaviour
     List<double> prv = new List<double>();
     List<double> SDNN = new List<double>();
     List<double> RMSSD = new List<double>();
+    List<double> LFHF_Ratio = new List<double>();
+    List<double> LF_Power = new List<double>();
+    List<double> HF_Power = new List<double>();
+    static int average_count = 0;
+    bool averagecheck = false;
+    //int Baseline;
 
     public void PeakDetection(int[] ppgArray)
     {
@@ -239,11 +248,10 @@ public class Serial_DataStream : MonoBehaviour
         DateTime currentTime = DateTime.Now;
         TimeSpan elapsed = currentTime - startTime;
         int sec = (int)elapsed.TotalSeconds;
+        int Baseline = 2400;
+        Debug.Log("sec: " + sec);
 
-        int Baseline = 0;
-        //Debug.Log("sec: " + sec);
-
-        if (ppgArray.Length <= 765)
+        if (ppgArray.Length <= 1)
         {
             prevalue = 0;
         }
@@ -251,9 +259,17 @@ public class Serial_DataStream : MonoBehaviour
         {
             int prevalueIndex = ppgArray.Length - 2;
             prevalue = ppgArray[prevalueIndex];
-            Baseline = average(ppgArray);
+            /*if (averagecheck == false)
+            {
+                averagecheck = true;
+                Baseline = average(ppgArray);
+            }*/
         }
-
+        /*if (sec == 3 + average_count)
+        {
+            average(ppgArray);
+            average_count += 3;
+        }*/
         if (value >= Baseline) //피크가 Baseline보다 크면
         {
             if (prevalue > value && flag == false)
@@ -272,10 +288,10 @@ public class Serial_DataStream : MonoBehaviour
                     double peakInterval = (peaktime[peaktime.Count - 1] - peaktime[peaktime.Count - 2]);
                     ppi.Add(peakInterval);
                     prv.Add(peakInterval);
-                    DebugGUI.LogPersistent("PPI", "PPI: " + peakInterval.ToString("F2") + " Ms");
+                    DebugGUI.LogPersistent("PPI", "PPI: " + peakInterval.ToString("F2") + " ms");
                     DebugGUI.Graph("PPI", (float)peakInterval);
                     double HeartRate = 60000 / peakInterval;
-                    DebugGUI.LogPersistent("심박수", "심박수: " + HeartRate.ToString("F2") + " BPM");
+                    DebugGUI.LogPersistent("심박수", "심박수: " + HeartRate.ToString("F2") + " bpm");
                 }
             }
         }
@@ -286,21 +302,22 @@ public class Serial_DataStream : MonoBehaviour
         if (sec == 60 + plus)
         {
             double[] prvArray = prv.ToArray();
-            SDNN.Add(CaloulatSDNN(prvArray));
+            SDNN.Add(CalculatorSDNN(prvArray));
             DebugGUI.LogPersistent("SDNN", "SDNN: " + SDNN[SDNN.Count - 1].ToString("F2") + " ms");
-            RMSSD.Add(CaloulatRMSSD(prvArray));
+            RMSSD.Add(CalculatorRMSSD(prvArray));
             DebugGUI.LogPersistent("RMSSD", "RMSSD: " + RMSSD[RMSSD.Count -1].ToString("F2") + " ms");
-            CaloulatiorFFT();
+            CalculatorFFT();
             plus += 60;
             prv.Clear();
         }
     }
 
-    List<double> lfPeak = new List<double>();
-    List<double> hfPeak = new List<double>();
-    List<double> lfhfRatio = new List<double>();
-    static int InitialThresholdRatio = 70;
-    //임계값 업데이트
+    //adaptive threshold 구하는 함수
+    /*static int adaptivethreshold(int[] ppgArray)
+    {
+        int threshold = 0;
+    }*/
+
     static int average(int[] ppgdata)
     {
         int sum = 0;
@@ -312,14 +329,14 @@ public class Serial_DataStream : MonoBehaviour
         return average;
     }
 
-    public void CaloulatiorFFT()
+    public void CalculatorFFT()
     {
         double[] fftArray = fftppg.ToArray();
 
         int originalLength = fftArray.Length;
 
-        int newLangth = (int)Math.Pow(2, Math.Ceiling(Math.Log(originalLength, 2)));
-        Array.Resize(ref fftArray, newLangth);
+        int newLength = (int)Math.Pow(2, Math.Ceiling(Math.Log(originalLength, 2)));
+        Array.Resize(ref fftArray, newLength);
         Complex[] fftdata = fftArray.ToComplex();
         FourierTransform.FFT(fftdata, FourierTransform.Direction.Forward);
         for(int i = 0; i < fftdata.Length; i++)
@@ -334,10 +351,12 @@ public class Serial_DataStream : MonoBehaviour
         double hfEnd = 0.4;
 
         double lfPower = GetPowerInLFRange(fftdata, sampleRate, lfStart, lfEnd);
-        
+        LF_Power.Add(lfPower);
         double hfPower = GetPowerInHFRange(fftdata, sampleRate, hfStart, hfEnd);
+        HF_Power.Add(hfPower);
         double lfhfRatio = lfPower / hfPower;
-        DebugGUI.LogPersistent("LF/HF", "LF/HF: " + lfhfRatio.ToString("F2") + " ms");
+        LFHF_Ratio.Add(lfhfRatio);
+        DebugGUI.LogPersistent("LF/HF", "LF/HF Ratio: " + lfhfRatio.ToString("F2") + " ms");
         fftppg.Clear();
         fftArray.Clear();
     }
@@ -345,8 +364,8 @@ public class Serial_DataStream : MonoBehaviour
 
     static double GetPowerInHFRange(Complex[] specturm, double sampleRate, double startFrequency, double endFrequency)
     {
-        int startIndex = (int)(startFrequency / (sampleRate / specturm.Length));
-        int endIndex = (int)(endFrequency / (sampleRate / specturm.Length));
+        int startIndex = (int)((startFrequency * specturm.Length) / sampleRate);
+        int endIndex = (int)((endFrequency * specturm.Length) / sampleRate);
 
         double HFpowerSum = 0;
         for (int i = startIndex; i <= endIndex; i++)
@@ -358,11 +377,11 @@ public class Serial_DataStream : MonoBehaviour
     }
     static double GetPowerInLFRange(Complex[] specturm, double sampleRate, double startFrequency, double endFrequency)
     {
-        int startIndex = (int)(startFrequency * (sampleRate / specturm.Length));
-        int endIndex = (int)(endFrequency * (sampleRate / specturm.Length));
 
+        int startIndex = (int)((startFrequency * specturm.Length) / sampleRate);
+        int endIndex = (int)((endFrequency * specturm.Length) / sampleRate);
         double LFpowerSum = 0;
-        for (int i = startIndex; i <= endIndex; i++)
+        for (int i = startIndex; i <= endIndex; i ++)
         {
             LFpowerSum += specturm[i].Magnitude;
         }
@@ -372,7 +391,7 @@ public class Serial_DataStream : MonoBehaviour
 
 
     private static int plus = 0;
-    static double CaloulatSDNN(double[] RRInterval)
+    static double CalculatorSDNN(double[] RRInterval)
     {
         double sum = 0;
         double average = 0;
@@ -391,7 +410,7 @@ public class Serial_DataStream : MonoBehaviour
         return SDNN;
     }
 
-    static double CaloulatRMSSD(double[] RRInterval)
+    static double CalculatorRMSSD(double[] RRInterval)
     {
         double sum = 0;
         double RMSSD = 0;
@@ -422,13 +441,16 @@ public class Serial_DataStream : MonoBehaviour
     int j = 1;
     int k = 1;
     int l = 1;
+    int m = 1;
+    int n = 1;
+    int o = 1;
     public void WriteCSVRAW()
     {
-        int[] ppgArray = listPPG.ToArray();
+        /*int[] ppgArray = listPPG.ToArray();
 
         tw = new StreamWriter(filename_RAWPPG, true); // true를 사용하여 파일에 추가 모드로 열기
 
-        
+
         DateTime currentTime = DateTime.Now;
         TimeSpan elapsed = currentTime - startTime;
         diff_time = string.Format("{0}:{1}:{2}:{3}", elapsed.Hours, elapsed.Minutes, elapsed.Seconds, elapsed.Milliseconds);
@@ -436,29 +458,99 @@ public class Serial_DataStream : MonoBehaviour
         if (peaklist.Count == j && check == false)
         {
             check = true;
-            tw.WriteLine("{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}", diff_time, ppgArray[ppgArray.Length - 1], diff_time, peaklist[peaklist.Count - 1], diff_time, 0, diff_time, 0);
+            tw.WriteLine("{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}", diff_time, ppgArray[ppgArray.Length - 1], diff_time, peaklist[peaklist.Count - 1], diff_time, 0, diff_time, 0, diff_time, 0, 0, 0);
             j++;
         }
-        else if (SDNN.Count == k && check == false)
+        if (SDNN.Count == k && check == false)
         {
             check = true;
-            tw.WriteLine("{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}", diff_time, ppgArray[ppgArray.Length - 1], diff_time, 0, diff_time, SDNN[SDNN.Count - 1], diff_time, 0);
+            tw.WriteLine("{0}, {1}, {2}, {3}, {4}", SDNN[SDNN.Count -1], 0, 0, 0, 0);
             k++;
         }
         else if (RMSSD.Count == l && check == false)
         {
             check = true;
-            tw.WriteLine("{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}", diff_time, ppgArray[ppgArray.Length - 1], diff_time, 0, diff_time, 0, diff_time, RMSSD[RMSSD.Count - 1]);
+            tw.WriteLine("{0}, {1}, {2}, {3}, {4}", 0, RMSSD[RMSSD.Count -1], 0, 0, 0);
             l++;
+        }
+        else if (LFHF_Ratio.Count == m && check == false)
+        {
+            check = true;
+            tw.WriteLine("{0}, {1}, {2}, {3}, {4}", 0, 0, LFHF_Ratio[LFHF_Ratio.Count -1], 0, 0);
+            m++;
+        }
+        else if (LF_Power.Count == n && check == false)
+        {
+            check = true;
+            tw.WriteLine("{0}, {1}, {2}, {3}, {4}", 0, 0, 0, LF_Power[LF_Power.Count -1], 0);
+            n++;
+        }
+        else if (HF_Power.Count == o && check == false)
+        {
+            check = true;
+            tw.WriteLine("{0}, {1}, {2}, {3}, {4}", 0, 0, 0, 0, HF_Power[HF_Power.Count -1]);
+            o++;
         }
         else
         {
             check = false;
-            tw.WriteLine("{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}", diff_time, ppgArray[ppgArray.Length -1], diff_time, 0,diff_time, 0,diff_time, 0);
-        }   
+        }
+        tw.Flush();
+        tw.Close();
+    }*/
+
+
+        int[] ppgArray = listPPG.ToArray();
+
+        tw = new StreamWriter(filename_RAWPPG, true); // true를 사용하여 파일에 추가 모드로 열기
+
+
+        DateTime currentTime = DateTime.Now;
+        TimeSpan elapsed = currentTime - startTime;
+        diff_time = string.Format("{0}:{1}:{2}:{3}", elapsed.Hours, elapsed.Minutes, elapsed.Seconds, elapsed.Milliseconds);
+        //Debug.Log("시간: " + diff_time);
+        if (peaklist.Count == j && check == false)
+        {
+            check = true;
+            tw.WriteLine("{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}", diff_time, ppgArray[ppgArray.Length - 1], diff_time, peaklist[peaklist.Count - 1], diff_time, 0, diff_time, 0, diff_time, 0, 0, 0);
+            j++;
+        }
+        else if (SDNN.Count == k && check == false)
+        {
+            check = true;
+            tw.WriteLine("{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}", diff_time, ppgArray[ppgArray.Length - 1], diff_time, 0, diff_time, SDNN[SDNN.Count - 1], diff_time, 0, diff_time, 0, 0, 0);
+            k++;
+        }
+        else if (RMSSD.Count == l && check == false)
+        {
+            check = true;
+            tw.WriteLine("{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}", diff_time, ppgArray[ppgArray.Length - 1], diff_time, 0, diff_time, 0, diff_time, RMSSD[RMSSD.Count - 1], diff_time, 0, 0, 0);
+            l++;
+        }
+        else if (LFHF_Ratio.Count == m && check == false)
+        {
+            check = true;
+            tw.WriteLine("{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}", diff_time, ppgArray[ppgArray.Length - 1], diff_time, 0, diff_time, 0, diff_time, 0, diff_time, LFHF_Ratio[LFHF_Ratio.Count - 1], 0, 0);
+            m++;
+        }
+        else if (LF_Power.Count == n && check == false)
+        {
+            check = true;
+            tw.WriteLine("{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}", diff_time, ppgArray[ppgArray.Length - 1], diff_time, 0, diff_time, 0, diff_time, 0, diff_time, 0, LF_Power[LF_Power.Count - 1], 0);
+            n++;
+        }
+        else if (HF_Power.Count == o && check == false)
+        {
+            check = true;
+            tw.WriteLine("{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}", diff_time, ppgArray[ppgArray.Length - 1], diff_time, 0, diff_time, 0, diff_time, 0, diff_time, 0, 0, HF_Power[HF_Power.Count - 1]);
+            o++;
+        }
+        else
+        {
+            check = false;
+            tw.WriteLine("{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}", diff_time, ppgArray[ppgArray.Length - 1], diff_time, 0, diff_time, 0, diff_time, 0, diff_time, 0, 0, 0);
+        }
         tw.Flush();
         tw.Close();
     }
 }
-
-
