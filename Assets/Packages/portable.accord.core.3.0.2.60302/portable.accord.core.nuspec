@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd">
+  <metadata>
+    <id>portable.accord.core</id>
+    <version>3.0.2.60302</version>
+    <title>Portable Accord Core</title>
+    <authors>César de Souza, Anders Gustafsson, Cureos AB</authors>
+    <owners>César de Souza, Anders Gustafsson, Cureos AB</owners>
+    <licenseUrl>https://www.gnu.org/licenses/lgpl.html#content</licenseUrl>
+    <projectUrl>https://github.com/cureos/accord</projectUrl>
+    <iconUrl>https://raw.githubusercontent.com/cureos/accord/portable/Setup/Portable/NuGet/portable-accord.png</iconUrl>
+    <requireLicenseAcceptance>true</requireLicenseAcceptance>
+    <description>Portable Accord Core contains the core types for the Accord.NET Framework on mobile and tablet devices.</description>
+    <summary>Core types for Portable Accord.NET Framework</summary>
+    <copyright>(c) 2009-2015 César de Souza, 2013-2016 Anders Gustafsson, Cureos AB</copyright>
+    <language>en-US</language>
+    <tags>accord.net aforge.net PCL .NET WPF UWP WPA81 Windows8.1 Xamarin.iOS Xamarin.Android</tags>
+    <dependencies>
+      <dependency id="shim" version="2.0.0" />
+    </dependencies>
+  </metadata>
+</package>

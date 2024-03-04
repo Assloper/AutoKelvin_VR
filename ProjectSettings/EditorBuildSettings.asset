@@ -9,7 +9,7 @@ EditorBuildSettings:
     path: Assets/Scenes/Kelvin MAP.unity
     guid: 9fc0d4010bbf28b4594072e72b8655ab
   m_configObjects:
-    Unity.XR.Oculus.Settings: {fileID: 11400000, guid: d57fe9f92fb9279478baed28295cf2e8, type: 2}
+    Unity.XR.Oculus.Settings: {fileID: 0}
     com.unity.xr.management.loader_settings: {fileID: 11400000, guid: aaa6290fb0036744da34e4b9c608528d, type: 2}
-    com.unity.xr.openxr.settings4: {fileID: 11400000, guid: edee117c2552c4a4dbcc3469f5d9c8fe, type: 2}
-    xr.sdk.mock-hmd.settings: {fileID: 11400000, guid: 443b390cb35743d45be119deefea3e17, type: 2}
+    com.unity.xr.openxr.settings4: {fileID: 11400000, guid: 1f5234fa72629f6458e57bf4cd5d3ecb, type: 2}
+    xr.sdk.mock-hmd.settings: {fileID: 0}
