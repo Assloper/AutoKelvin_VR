@@ -22,7 +22,10 @@ using System.Drawing.Text;
 using System.Data.SqlTypes;
 using UnityEngine.UI;
 using Accord.Fuzzy;
+using Accord.Neuro;
+using Accord.Neuro.Learning;
 using AI.Fuzzy.Library;
+using Accord.Math.Random;
 
 public class Serial_DataStream : MonoBehaviour
 {
@@ -122,10 +125,16 @@ public class Serial_DataStream : MonoBehaviour
 
     }
 
+
+
+
     int streamdata;
     List<double> ppi = new List<double>();
     List<double> fftppg = new List<double>();
-    List<int> thresholdppg = new List<int>();
+
+    int preserveLength = 765;
+    int deletecount = 1;
+
     void PPGdata()
     {
         int receivedNumber = serialPort.BytesToRead;
@@ -143,21 +152,35 @@ public class Serial_DataStream : MonoBehaviour
                     streamdata = ((PacketStreamData[i * 2] & 0x0F) << 8) + PacketStreamData[i * 2 + 1]; //PPG 데이터
                     listPPG.Add(streamdata);
                     fftppg.Add(streamdata);
-                    thresholdppg.Add(streamdata);
                     int[] ppgArray = listPPG.ToArray();
-                    
+
 
                     if (ppgArray.Length >= 0)
                     {
-                        WriteCSVRAW();
+                        //WriteCSVRAW();
                         PeakDetection(ppgArray);
                         DebugGUI.LogPersistent("PPG", "PPG: " + listPPG[listPPG.Count - 1].ToString());
                         DebugGUI.Graph("PPG", ppgArray[ppgArray.Length - 1]);
+                        //DebugGUI.LogPersistent("listPPG", "ListPPG: " + listPPG.Count.ToString());
+                        //DebugGUI.LogPersistent("ppgArray.Length", "ppgArray.Length: " + ppgArray.Length.ToString());
                     }
+                    if (SDNN.Count == k && RMSSD.Count == l && LF_Power.Count == n && HF_Power.Count == o && LFHF_Ratio.Count == m)
+                    {
+                        WriteCSVRAW();
+                    }
+                    /*if (SDNN.Count == deletecount && RMSSD.Count == deletecount && LF_Power.Count == deletecount && HF_Power.Count == deletecount && LFHF_Ratio.Count == deletecount)
+                    {
+                        List<int> preservedList = listPPG.GetRange(listPPG.Count - preserveLength, preserveLength);
+                        listPPG.Clear();
+                        listPPG.AddRange(preservedList);
+                        deletecount++;
+                    }*/
                 }
             }
         }
     }
+
+    int z = 1;
 
     TextWriter tw;
     void Start()
@@ -167,6 +190,7 @@ public class Serial_DataStream : MonoBehaviour
         startTime = DateTime.Now;
         TextWriter tw = new StreamWriter(filename_RAWPPG, false);
         tw.WriteLine("Time, Value, Peak Data, SDNN, RMSSD, LF_Power, HF_Power, LF/HF Ratio, PPI");
+        //tw.WriteLine("SDNN, RMSSD, LF_Power, HF_Power, LF/HF Ratio, Stress Index, Color Temperature");
         tw.Close();
     }
 
@@ -184,86 +208,140 @@ public class Serial_DataStream : MonoBehaviour
 
     static double samplingRate = 255;
 
+    float LFHF_Ratio_Test = 0.1f;
+    float SDNN_Test = 0;
+    float RMSSD_Test = 0;
+    float Stress_Index_Test = 20;
+
+    List<float> Stress_value = new List<float>();
+    List<int> Color_Temperature = new List<int>();
+
     public void Fuzzy()
     {
-        //입력 변수 정의, LF/Hf Ratio
-        LinguisticVariable LFHF_Ratio_Fuzzy = new LinguisticVariable("LFHF_Ratio", 0, 3);
-        FuzzySet verylow = new FuzzySet("VeryLow", new TrapezoidalFunction(0, 0, 1.1f, 1.1f));
-        FuzzySet low = new FuzzySet("Low", new TrapezoidalFunction(0.3f, 0.3f, 1.7f, 1.7f));
-        FuzzySet moderate = new FuzzySet("Moderate", new TrapezoidalFunction(0.5f, 0.5f, 2.0f, 2.0f));
-        FuzzySet high = new FuzzySet("High", new TrapezoidalFunction(1.0f, 1.0f, 2.5f, 2.5f));
-        FuzzySet veryhigh = new FuzzySet("VeryHigh", new TrapezoidalFunction(1.2f, 1.2f, 3f, 3f));
-        LFHF_Ratio_Fuzzy.AddLabel(verylow);
-        LFHF_Ratio_Fuzzy.AddLabel(low);
-        LFHF_Ratio_Fuzzy.AddLabel(moderate);
-        LFHF_Ratio_Fuzzy.AddLabel(high);
-        LFHF_Ratio_Fuzzy.AddLabel(veryhigh);
-
         //입력 변수 정의, SDNN
-        LinguisticVariable SDNN_Fuzzy = new LinguisticVariable("SDNN", 0, 200);
-        FuzzySet verylowSDNN = new FuzzySet("VeryLow", new TrapezoidalFunction(0, 0, 50, 50));
-        FuzzySet lowSDNN = new FuzzySet("Low", new TrapezoidalFunction(20, 20, 70, 70));
-        FuzzySet moderateSDNN = new FuzzySet("Moderate", new TrapezoidalFunction(40, 40, 90, 90));
-        FuzzySet highSDNN = new FuzzySet("High", new TrapezoidalFunction(60, 60, 110, 110));
-        FuzzySet veryhighSDNN = new FuzzySet("VeryHigh", new TrapezoidalFunction(80, 80, 120, 120));
-        SDNN_Fuzzy.AddLabel(verylowSDNN);
-        SDNN_Fuzzy.AddLabel(lowSDNN);
-        SDNN_Fuzzy.AddLabel(moderateSDNN);
-        SDNN_Fuzzy.AddLabel(highSDNN);
-        SDNN_Fuzzy.AddLabel(veryhighSDNN);
+        LinguisticVariable SDNN_Fuzzy = new LinguisticVariable("SDNN", 0, 183);
+        FuzzySet Low_SDNN = new FuzzySet("Low", new TrapezoidalFunction(0, 0, 46, 126));
+        FuzzySet Medium_SDNN = new FuzzySet("Medium", new TrapezoidalFunction(14, 61, 173));
+        FuzzySet High_SDNN = new FuzzySet("High", new TrapezoidalFunction(25, 85, 183, 183));
+        SDNN_Fuzzy.AddLabel(Low_SDNN);
+        SDNN_Fuzzy.AddLabel(Medium_SDNN);
+        SDNN_Fuzzy.AddLabel(High_SDNN);
 
         //입력 변수 정의, RMSSD
-        LinguisticVariable RMSSD_Fuzzy = new LinguisticVariable("RMSSD", 0, 200);
-        FuzzySet verylowRMSSD = new FuzzySet("VeryLow", new TrapezoidalFunction(0, 0, 50, 50));
-        FuzzySet lowRMSSD = new FuzzySet("Low", new TrapezoidalFunction(20, 20, 70, 70));
-        FuzzySet moderateRMSSD = new FuzzySet("Moderate", new TrapezoidalFunction(40, 40, 90, 90));
-        FuzzySet highRMSSD = new FuzzySet("High", new TrapezoidalFunction(60, 60, 110, 110));
-        FuzzySet veryhighRMSSD = new FuzzySet("VeryHigh", new TrapezoidalFunction(80, 80, 120, 120));
-        RMSSD_Fuzzy.AddLabel(verylowRMSSD);
-        RMSSD_Fuzzy.AddLabel(lowRMSSD);
-        RMSSD_Fuzzy.AddLabel(moderateRMSSD);
-        RMSSD_Fuzzy.AddLabel(highRMSSD);
-        RMSSD_Fuzzy.AddLabel(veryhighRMSSD);
-        
+        LinguisticVariable RMSSD_Fuzzy = new LinguisticVariable("RMSSD", 0, 314);
+        FuzzySet Low_RMSSD = new FuzzySet("Low", new TrapezoidalFunction(0, 0, 53, 182));
+        FuzzySet Medium_RMSSD = new FuzzySet("Medium", new TrapezoidalFunction(2, 78, 314));
+        FuzzySet High_RMSSD = new FuzzySet("High", new TrapezoidalFunction(14, 104, 314, 314));
+        RMSSD_Fuzzy.AddLabel(Low_RMSSD);
+        RMSSD_Fuzzy.AddLabel(Medium_RMSSD);
+        RMSSD_Fuzzy.AddLabel(High_RMSSD);
+
+        //입력 변수 정의, LF/HF Ratio
+        LinguisticVariable LFHF_Ratio_Fuzzy = new LinguisticVariable("LFHF_Ratio", 0, 20);
+        FuzzySet Low_LFHF = new FuzzySet("Low", new TrapezoidalFunction(0, 0, 1.1f, 4f));
+        FuzzySet Medium_LFHF = new FuzzySet("Medium", new TrapezoidalFunction(0f, 1.5f, 18f));
+        FuzzySet High_LFHF = new FuzzySet("High", new TrapezoidalFunction(0f, 1.6f, 20f, 20f));
+        LFHF_Ratio_Fuzzy.AddLabel(Low_LFHF);
+        LFHF_Ratio_Fuzzy.AddLabel(Medium_LFHF);
+        LFHF_Ratio_Fuzzy.AddLabel(High_LFHF);
+
+        //입력 변수 정의, Stress
+        LinguisticVariable Stress_Fuzzy = new LinguisticVariable("Stress_value", 0, 100);
+        FuzzySet Low_Stress = new FuzzySet("Low", new TrapezoidalFunction(0, 0, 25, 50));
+        FuzzySet Medium_Stress = new FuzzySet("Medium", new TrapezoidalFunction(30, 50, 70));
+        FuzzySet High_Stress = new FuzzySet("High", new TrapezoidalFunction(50, 75, 100, 100));
+        Stress_Fuzzy.AddLabel(Low_Stress);
+        Stress_Fuzzy.AddLabel(Medium_Stress);
+        Stress_Fuzzy.AddLabel(High_Stress);
+
         //출력 변수 정의, ColorTemperature
-        LinguisticVariable ColorTemperature_Fuzzy = new LinguisticVariable("ColorTemperature", 0, 12000);
-        FuzzySet verywarm = new FuzzySet("VeryWarm", new TrapezoidalFunction(0, 0, 5000, 5000));
-        FuzzySet warm = new FuzzySet("Warm", new TrapezoidalFunction(2000, 2000, 7000, 7000));
-        FuzzySet normal = new FuzzySet("Normal", new TrapezoidalFunction(4000, 4000, 9000, 9000));
-        FuzzySet cool = new FuzzySet("Cool", new TrapezoidalFunction(6000, 6000, 11000, 11000));
-        FuzzySet verycool = new FuzzySet("VeryCool", new TrapezoidalFunction(8000, 8000, 12000, 12000));
-        ColorTemperature_Fuzzy.AddLabel(verywarm);
+        LinguisticVariable ColorTemperature_Fuzzy = new LinguisticVariable("ColorTemperature", 1000, 12000);
+        FuzzySet warm = new FuzzySet("Warm", new TrapezoidalFunction(1000, 1000, 2500, 4000));
+        FuzzySet normal = new FuzzySet("Normal", new TrapezoidalFunction(3000, 5500, 8000));
+        FuzzySet cool = new FuzzySet("Cool", new TrapezoidalFunction(6000, 9000, 12000, 12000));
         ColorTemperature_Fuzzy.AddLabel(warm);
         ColorTemperature_Fuzzy.AddLabel(normal);
         ColorTemperature_Fuzzy.AddLabel(cool);
-        ColorTemperature_Fuzzy.AddLabel(verycool);
 
         //데이터 베이스 정의
         Database fuzzyDB = new Database(); //데이터 베이스 초기화
         fuzzyDB.AddVariable(LFHF_Ratio_Fuzzy); //데이터 베이스에 입력변수 추가
         fuzzyDB.AddVariable(SDNN_Fuzzy); //데이터 베이스에 입력변수 추가
         fuzzyDB.AddVariable(RMSSD_Fuzzy); //데이터 베이스에 입력변수 추가
+        fuzzyDB.AddVariable(Stress_Fuzzy); //데이터 베이스에 입력변수 추가
         fuzzyDB.AddVariable(ColorTemperature_Fuzzy); //데이터 베이스에 출력변수 추가
 
         //추론 시스템 정의
         InferenceSystem IS = new InferenceSystem(fuzzyDB, new CentroidDefuzzifier(1000));
 
         //규칙 정의
-        IS.NewRule("Rule 1", "IF LFHF_Ratio IS VeryLow THEN ColorTemperature IS VeryWarm");
-        IS.NewRule("Rule 2", "IF LFHF_Ratio IS Low THEN ColorTemperature IS Warm");
-        IS.NewRule("Rule 3", "IF LFHF_Ratio IS Moderate THEN ColorTemperature IS Normal");
-        IS.NewRule("Rule 4", "IF LFHF_Ratio IS High THEN ColorTemperature IS Cool");
-        IS.NewRule("Rule 5", "IF LFHF_Ratio IS VeryHigh THEN ColorTemperature IS VeryCool");
+        IS.NewRule("Rule 1", "IF SDNN IS Low AND RMSSD IS Low AND LFHF_Ratio IS High THEN Stress_value IS High");
+        IS.NewRule("Rule 2", "IF SDNN IS Medium AND RMSSD IS Medium AND LFHF_Ratio IS Medium THEN Stress_value IS Medium");
+        IS.NewRule("Rule 3", "IF SDNN IS High AND RMSSD IS High AND LFHF_Ratio IS Low THEN Stress_value IS Low");
+        IS.NewRule("Rule 4", "IF SDNN IS Low AND RMSSD IS Low AND LFHF_Ratio IS Low THEN Stress_value IS High");
+        IS.NewRule("Rule 5", "IF SDNN IS Medium AND RMSSD IS Medium AND LFHF_Ratio IS Low THEN Stress_value IS Medium");
+        IS.NewRule("Rule 6", "IF SDNN IS High AND RMSSD IS High AND LFHF_Ratio IS High THEN Stress_value IS Low");
+        IS.NewRule("Rule 7", "IF SDNN IS Low AND RMSSD IS Medium AND LFHF_Ratio IS High THEN Stress_value IS Medium");
+        IS.NewRule("Rule 8", "IF SDNN IS Medium AND RMSSD IS High AND LFHF_Ratio IS Medium THEN Stress_value IS Medium");
+        IS.NewRule("Rule 9", "IF SDNN IS High AND RMSSD IS Low AND LFHF_Ratio IS Low THEN Stress_value IS Low");
+        IS.NewRule("Rule 10", "IF SDNN IS Low AND RMSSD IS High AND LFHF_Ratio IS Low THEN Stress_value IS Low");
+        IS.NewRule("Rule 11", "IF SDNN IS Medium AND RMSSD IS Low AND LFHF_Ratio IS Medium THEN Stress_value IS Medium");
+        IS.NewRule("Rule 12", "IF SDNN IS High AND RMSSD IS Medium AND LFHF_Ratio IS High THEN Stress_value IS Low");
+        IS.NewRule("Rule 13", "IF SDNN IS Low AND RMSSD IS High AND LFHF_Ratio IS High THEN Stress_value IS High");
+        IS.NewRule("Rule 14", "IF SDNN IS Medium AND RMSSD IS Low AND LFHF_Ratio IS Low THEN Stress_value IS Low");
+        IS.NewRule("Rule 15", "IF SDNN IS High AND RMSSD IS Medium AND LFHF_Ratio IS Medium THEN Stress_value IS Medium");
+        IS.NewRule("Rule 16", "IF SDNN IS Low AND RMSSD IS Low AND LFHF_Ratio IS Medium THEN Stress_value IS High");
+        IS.NewRule("Rule 17", "IF SDNN IS Medium AND RMSSD IS Medium AND LFHF_Ratio IS High THEN Stress_value IS Medium");
+        IS.NewRule("Rule 18", "IF SDNN IS High AND RMSSD IS High AND LFHF_Ratio IS Low THEN Stress_value IS Low");
+        IS.NewRule("Rule 19", "IF SDNN IS Low AND RMSSD IS Medium AND LFHF_Ratio IS Low THEN Stress_value IS Low");
+        IS.NewRule("Rule 20", "IF SDNN IS Medium AND RMSSD IS High AND LFHF_Ratio IS Medium THEN Stress_value IS Medium");
+        IS.NewRule("Rule 21", "IF SDNN IS High AND RMSSD IS Low AND LFHF_Ratio IS High THEN Stress_value IS High");
+        IS.NewRule("Rule 22", "IF SDNN IS Low AND RMSSD IS High AND LFHF_Ratio IS Medium THEN Stress_value IS Medium");
+        IS.NewRule("Rule 23", "IF SDNN IS Medium AND RMSSD IS Low AND LFHF_Ratio IS High THEN Stress_value IS Medium");
+        IS.NewRule("Rule 24", "IF SDNN IS High AND RMSSD IS Medium AND LFHF_Ratio IS Low THEN Stress_value IS Medium");
+        IS.NewRule("Rule 25", "IF SDNN IS Low AND RMSSD IS Low AND LFHF_Ratio IS Low THEN Stress_value IS High");
+        IS.NewRule("Rule 26", "IF SDNN IS Medium AND RMSSD IS Medium AND LFHF_Ratio IS Low THEN Stress_value IS Medium");
+        IS.NewRule("Rule 27", "IF SDNN IS High AND RMSSD IS High AND LFHF_Ratio IS High THEN Stress_value IS Low");
 
+        double SDNN_Fuzzy_Input = SDNN[SDNN.Count - 1];
+        IS.SetInput("SDNN", (float)SDNN_Fuzzy_Input);
+        double RMSSD_Fuzzy_Input = RMSSD[RMSSD.Count - 1];
+        IS.SetInput("RMSSD", (float)RMSSD_Fuzzy_Input);
+        double LFHFRATIO_Fuzzy_Input = LFHF_Ratio[LFHF_Ratio.Count - 1];
+        IS.SetInput("LFHF_Ratio", (float)LFHFRATIO_Fuzzy_Input);
 
-        double LFHFRATIO_Fuzzy = LFHF_Ratio[LFHF_Ratio.Count - 1];
-        IS.SetInput("LFHF_Ratio", (float)LFHFRATIO_Fuzzy);
-        //IS.SetInput("ColorTemperature", (float)LightTemperature);
+        float Stress_result = IS.Evaluate("Stress_value");
+        DebugGUI.LogPersistent("Stress_value", "Stress value: " + Stress_result.ToString("F2"));
+        double Stress_Fuzzy_Input = Math.Round(Stress_result, 2);
+        IS.SetInput("Stress_value", (float)Stress_Fuzzy_Input);
+        Stress_value.Add((float)Stress_result);
+        /*IS.SetInput("Stress_Index", Stress_Index_Test);
+        Stress_Index_Test += 20f;*/
+
+        //규칙 정의
+        IS.NewRule("Rule 28", "IF Stress_value IS Low THEN ColorTemperature IS Cool");
+        IS.NewRule("Rule 29", "IF Stress_value IS Medium THEN ColorTemperature IS Normal");
+        IS.NewRule("Rule 30", "IF Stress_value IS High THEN ColorTemperature IS Warm");
+
+        //Test
+        /*IS.SetInput("SDNN", SDNN_Test);
+        IS.SetInput("RMSSD", RMSSD_Test);
+        IS.SetInput("LFHF_Ratio", LFHF_Ratio_Test);*/
 
         float ColorTemperature_result = IS.Evaluate("ColorTemperature");
+        Color_Temperature.Add((int)ColorTemperature_result);
         DebugGUI.LogPersistent("ColorTemperature", "ColorTemperature: " + ColorTemperature_result.ToString("F0"));
         Led.GetComponent<LightTemperature>().temperature = ColorTemperature_result;
+
+        /*LFHF_Ratio_Test += 0.1f;
+        DebugGUI.LogPersistent("LFHF_Ratio_Test", "LFHR_Ratio_Test: " + LFHF_Ratio_Test.ToString("F2"));
+        SDNN_Test += 10f;
+        DebugGUI.LogPersistent("SDNN_Test", "SDNN_Test: " + SDNN_Test.ToString("F2"));
+        RMSSD_Test += 10f;  
+        DebugGUI.LogPersistent("RMSSD_Test", "RMSSD_Test: " + RMSSD_Test.ToString("F2"));*/
     }
+
+
 
     bool flag = false;
     List<int> peaklist = new List<int>(); //Peak 값 저장하는 리스트
@@ -298,7 +376,7 @@ public class Serial_DataStream : MonoBehaviour
             int prevalueIndex = ppgArray.Length - 2;
             prevalue = ppgArray[prevalueIndex];
             //Threshold = testAverage(ppgArray);
-            Threshold = CalculateMovingAverage(ppgArray);
+            Threshold = CalculateAdaptiveThreshold(ppgArray);
             DebugGUI.LogPersistent("Threshold", "Threshold: " + Threshold.ToString("F2"));
         }
         if (value >= Threshold)
@@ -307,22 +385,22 @@ public class Serial_DataStream : MonoBehaviour
             {
                 flag = true;
                 peaklist.Add(prevalue);
-                Debug.Log("피크값: " + peaklist[peaklist.Count - 1]);
+                //Debug.Log("피크값: " + peaklist[peaklist.Count - 1]);
                 DateTime currentpeakTime = DateTime.Now;
                 TimeSpan ppitime = currentpeakTime - startTime;
                 peak_time = ppitime.TotalMilliseconds;
-                Debug.Log("peak time: " + peak_time);
+                //Debug.Log("peak time: " + peak_time);
                 peaktime.Add(peak_time);
 
                 DebugGUI.LogPersistent("Peak", "Peak: " + peaklist[peaklist.Count - 1].ToString("F2"));
                 if (peaktime.Count > 1)
                 {
-                    double peakInterval = (peaktime[peaktime.Count - 1] - peaktime[peaktime.Count - 2]);
-                    if(peakInterval > 1000)
+                    double peakInterval = peaktime[peaktime.Count - 1] - peaktime[peaktime.Count - 2];
+                    if (peakInterval > 1000)
                     {
                         peakInterval = 1000;
                     }
-                    if(peakInterval < 300)
+                    if (peakInterval < 300)
                     {
                         peakInterval = 300;
                     }
@@ -339,7 +417,7 @@ public class Serial_DataStream : MonoBehaviour
         {
             flag = false;
         }
-        if (ppgArray.Length == 15300 + plus)
+        if (ppgArray.Length == 15300+plus)//15300 + plus)// //
         {
             CalculatorFFT();
             double[] prvArray = prv.ToArray();
@@ -348,17 +426,18 @@ public class Serial_DataStream : MonoBehaviour
             RMSSD.Add(CalculatorRMSSD(prvArray));
             DebugGUI.LogPersistent("RMSSD", "RMSSD: " + RMSSD[RMSSD.Count -1].ToString("F2") + " ms");
             Fuzzy();
+            //plus += 2550;
             plus += 15300;
             prv.Clear();
         }
     }
 
     static int ThresholdTimer = 765;
-    static int CalculateMovingAverage(int[] ppgArray)
+    static int CalculateAdaptiveThreshold(int[] ppgArray)
     {
         int arrayLength = ppgArray.Length; //배열의 길이
         // 최소값이 0이고, (배열의 길이 - 765) 중 큰 값을 선택하여 시작 인덱스를 결정
-        int startIndex = Math.Max(0, arrayLength - ThresholdTimer); 
+        int startIndex = Math.Max(0, arrayLength - ThresholdTimer);
         List<int> recentData = new List<int>();
 
         for (int i = startIndex; i <arrayLength; i++)
@@ -366,13 +445,13 @@ public class Serial_DataStream : MonoBehaviour
             recentData.Add(ppgArray[i]);
         }
         // 최근 데이터의 평균을 계산하고 이에 300을 더한 값을 이동 평균으로 설정
-        double Threshold = recentData.Average() + 300;
+        double Threshold = recentData.Average() + (recentData.Average() * 10/100);
         // 이동 평균의 소수점 이하를 버림하여 정수값으로 반환
         return (int)Math.Floor(Threshold);
     }
     public void CalculatorFFT()
     {
-        double[] fftArray = fftppg.ToArray();
+        double[] fftArray = prv.ToArray();
 
         int originalLength = fftArray.Length;
 
@@ -380,7 +459,7 @@ public class Serial_DataStream : MonoBehaviour
         Array.Resize(ref fftArray, newLength);
         Complex[] fftdata = fftArray.ToComplex();
         FourierTransform.FFT(fftdata, FourierTransform.Direction.Forward);
-        for(int i = 0; i < fftdata.Length; i++)
+        for (int i = 0; i < fftdata.Length; i++)
         {
             DebugGUI.Graph("FFT", (float)fftdata[i].Magnitude);
         }
@@ -421,7 +500,7 @@ public class Serial_DataStream : MonoBehaviour
         int startIndex = (int)((startFrequency * specturm.Length) / sampleRate);
         int endIndex = (int)((endFrequency * specturm.Length) / sampleRate);
         double LFpowerSum = 0;
-        for (int i = startIndex; i <= endIndex; i ++)
+        for (int i = startIndex; i <= endIndex; i++)
         {
             LFpowerSum += specturm[i].Magnitude;
         }
@@ -468,9 +547,12 @@ public class Serial_DataStream : MonoBehaviour
         DebugGUI.RemoveGraph("PPI");
         DebugGUI.RemoveGraph("FFT");
     }
+    static string filename_Date = DateTime.Now.ToString("yyyyMMdd_HHmmss");
 
-    string filename_RAWPPG = Application.dataPath + "/Test.csv";
-    string filename = "";
+
+    string filename_RAWPPG = filename + "/PRV_" + filename_Date + ".csv";
+    static string filename = "C:/Users/Miran-Laptop/Documents/GitHub/AutoKelvin_VR/Assets/ppgDATA";
+
 
     string diff_time;
     bool check = false;
@@ -484,10 +566,47 @@ public class Serial_DataStream : MonoBehaviour
     int n = 1; //LF_Power
     int o = 1; //HF_Power
     int p = 1; //PPI
+    int q = 1; //Stress_Index
+    int r = 1; //Color_Temperature
+
     public void WriteCSVRAW()
     {
         //PPG Array가 들어오기 시작하는 구간
         int[] ppgArray = listPPG.ToArray();
+        //Excel 작성 시작
+        tw = new StreamWriter(filename_RAWPPG, true); // true를 사용하여 파일에 추가 모드로 열기
+
+        //시간 차를 구하기 위하여 현재 시간을 구함
+        DateTime currentTime = DateTime.Now;
+        //앞서 전역변수로 선언된 Starttime과 현재시간인 CurrentTime을 활용해서 시간차 구함
+        TimeSpan elapsed = currentTime - startTime;
+        //시간 차 포맷
+        diff_time = string.Format("{0}:{1}:{2}:{3}", elapsed.Hours, elapsed.Minutes, elapsed.Seconds, elapsed.Milliseconds);
+        //Debug.Log("시간: " + diff_time);
+        //만약 peaklist의 Count가 오를 경우 peaklist의 마지막 값과 시간을 출력하고 그 외에는 0을 출력
+        if (SDNN.Count == k && RMSSD.Count == l && LF_Power.Count == n && HF_Power.Count == o && LFHF_Ratio.Count == m && check == false)
+        {
+            check = true;
+            tw.WriteLine("{0}, {1}, {2}, {3}, {4}, {5}, {6}", SDNN[SDNN.Count - 1], RMSSD[RMSSD.Count -1], LF_Power[LF_Power.Count -1], HF_Power[HF_Power.Count - 1], LFHF_Ratio[LFHF_Ratio.Count -1], Stress_value[Stress_value.Count - 1], Color_Temperature[Color_Temperature.Count - 1]);
+            k++;
+            l++;
+            m++;
+            n++;
+            o++;
+            q++;
+            r++;
+        }
+        else
+        {
+            check = false;
+        }
+        tw.Close();
+    }
+
+    /*public void WriteCSVRAW()
+    {
+        //PPG Array가 들어오기 시작하는 구간
+        int[] ppgArray = listPPG.ToArray();        
         //Excel 작성 시작
         tw = new StreamWriter(filename_RAWPPG, true); // true를 사용하여 파일에 추가 모드로 열기
 
@@ -508,8 +627,7 @@ public class Serial_DataStream : MonoBehaviour
         else if (SDNN.Count == k && RMSSD.Count == l && LF_Power.Count == n && HF_Power.Count == o && LFHF_Ratio.Count == m && check == false)
         {
             check = true;
-            tw.WriteLine("{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}", diff_time, ppgArray[ppgArray.Length - 1], null, SDNN[SDNN.Count - 1], RMSSD[RMSSD.Count -1], LF_Power[LF_Power.Count -1], HF_Power[HF_Power.Count - 1], LFHF_Ratio[LFHF_Ratio.Count -1], null);
-            k++;
+/            k++;
             l++;
             m++;
             n++;
@@ -528,5 +646,5 @@ public class Serial_DataStream : MonoBehaviour
         }
         tw.Flush();
         tw.Close();
-    }
+    }*/
 }

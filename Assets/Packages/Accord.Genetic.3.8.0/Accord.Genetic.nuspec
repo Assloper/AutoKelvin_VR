@@ -1,0 +1,21 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>Accord.Genetic</id>
+    <version>3.8.0</version>
+    <title>Accord.Genetic</title>
+    <authors>Accord.NET</authors>
+    <owners>Accord.NET</owners>
+    <requireLicenseAcceptance>true</requireLicenseAcceptance>
+    <licenseUrl>http://accord-framework.net/license.txt</licenseUrl>
+    <projectUrl>http://accord-framework.net/</projectUrl>
+    <iconUrl>http://accord-framework.net/logo.png</iconUrl>
+    <description>Contains chromosome and selection classes to create Genetic Algorithms (GA), Genetic Programming (GP) and Gene Expression Programming (GEP). This package originated from the AForge.NET Framework and is now part of the Accord.NET Framework.</description>
+    <summary>Genetic Algorithms (GA), Genetic Programming (GP) and Gene Expression Programming (GEP) for non-linear optimization.</summary>
+    <tags>accord.net aforge.net framework genetic algorithms programming GA GP GEP unity3d unity</tags>
+    <dependencies>
+      <dependency id="Accord" version="3.8.0" />
+      <dependency id="Accord.Math" version="3.8.0" />
+    </dependencies>
+  </metadata>
+</package>
